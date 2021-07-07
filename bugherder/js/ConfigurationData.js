@@ -11,7 +11,7 @@ var ConfigurationData = {
       if (errmsg)
         errorCallback(errmsg);
       else
-        self.parseData(data, loadCallback);
+        self.parseData(data, loadCallback, errorCallback);
     };
 
     var bugzilla = bz.createClient({timeout: 60000});
@@ -19,7 +19,7 @@ var ConfigurationData = {
   },
 
 
-  parseData: function CD_parseData(data, loadCallback) {
+  parseData: function CD_parseData(data, loadCallback, errorCallback) {
     if (!('product' in data)) {
         loadCallback();
         return;
@@ -32,6 +32,9 @@ var ConfigurationData = {
           break;
         }
       }
+    }
+    else {
+      errorCallback("Bugzilla returned invalid configuration data: missing flag_type Array");
     }
     var products = data.product;
     var productMilestones = {}
