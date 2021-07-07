@@ -256,11 +256,13 @@ var PushData = {
       push.tags.push('backout');
     }
 
-    if (push.hgLink.search(/releases\//) >= 0) {
+    // If this is on a release branch and NOT a backout, tag as 'uplift'
+    if (push.tags.indexOf('backout') >= 0  && push.hgLink.search(/releases\//) >= 0) {
       push.tags.push('uplift');
     }
 
-    if (push.hgLink.search(/integration\//) >= 0) {
+    // If this is on an integration branch and NOT a backout, tag as 'landing'
+    if (push.tags.indexOf('backout') >= 0 && push.hgLink.search(/integration\//) >= 0) {
       push.tags.push('landing');
     }
   },
