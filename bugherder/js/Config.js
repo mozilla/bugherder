@@ -53,6 +53,7 @@ var Config = {
     "thunderbird-esr115": "comm-esr115",
     "thunderbird-esr128": "comm-esr128",
     "thunderbird-esr140": "comm-esr140",
+    "thunderbird-esr153": "comm-esr153",
   },
 
   treeInfo: {
@@ -95,6 +96,11 @@ var Config = {
       repo: "releases/mozilla-esr140",
       trackedTree: true,
       synonyms: ["esr140", "releases/mozilla-esr140", "mozilla-esr140"]
+    },
+    "mozilla-esr153": {
+      repo: "releases/mozilla-esr153",
+      trackedTree: true,
+      synonyms: ["esr153", "releases/mozilla-esr153", "mozilla-esr153"]
     },
     "ash": {
       repo: "projects/ash",
@@ -200,6 +206,11 @@ var Config = {
       repo: "releases/comm-esr140",
       trackedTree: true,
       synonyms: ["releases/comm-esr140", "comm-esr140"]
+    },
+    "comm-esr153": {
+      repo: "releases/comm-esr153",
+      trackedTree: true,
+      synonyms: ["releases/comm-esr153", "comm-esr153"]
     },
   }
 };
