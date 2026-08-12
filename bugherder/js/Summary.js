@@ -23,6 +23,11 @@ var Summary = {
     else
      html += '&nbsp;';
     html += '</td><td>';
+    if ('groups' in data)
+      html += UI.htmlEncode(data.groups.add.join(', '));
+    else
+      html += '&nbsp;';
+    html += '</td><td>';
     if ('comment' in data) {
       var comment = data.comment.body;
       comment = comment.replace(/\n/g, '<br>');
@@ -45,7 +50,8 @@ var Summary = {
     }
 
     html += '<br><table class="summaryTable"><tr class="thead"><td>Bug</td><td>Resolved?</td>';
-    html += '<td>Reopened?</td><td>Target Milestone</td><td>Assignee</td><td>Comment</td></tr>';
+    html += '<td>Reopened?</td><td>Target Milestone</td><td>Assignee</td><td>Moved to group</td>';
+    html += '<td>Comment</td></tr>';
     html += sent.map(function(data) {return this.makeSummaryForData(data);}, this).join('');
     html += '</table>';
     return html;

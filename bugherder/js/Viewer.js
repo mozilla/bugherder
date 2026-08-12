@@ -19,6 +19,7 @@ var Viewer = {
       'commentCheck': this.decorateWithRequired(this.onCommentCheckClick, indexBug, 'Comment'),
       'resolveCheck': this.decorateWithRequired(this.onResolveCheckClick, indexBug, 'Resolve'),
       'reopenCheck' : this.decorateWithRequired(this.onReopenCheckClick, indexBug, 'Reopen'),
+      'securityReleaseCheck': this.decorateWithRequired(this.onSecurityReleaseCheckClick, indexBug, 'Security release'),
       'viewhide'    : this.decorateWithRequired(this.onViewHideClick, indexBug, 'View/Hide'),
       'fileviewhide': this.decorateWithRequired(this.onFileViewHideClick, indexOnly, 'View/Hide files'),
       'expandButton': this.onExpandButtonClick,
@@ -179,6 +180,8 @@ var Viewer = {
     // resolution).
     $('.'+bug+'Milestone').attr('disabled', !target.checked);
 
+    $('.'+bug+'securityReleasecheck').attr('checked', target.checked);
+
     ViewerController.onResolveCheckClick(bug, target.checked);
   },
 
@@ -191,6 +194,14 @@ var Viewer = {
     // you would ever backout a bug without an explanation!
     this.unsetComments(bug, target.checked);
     ViewerController.onReopenCheckClick(bug, target.checked);
+  },
+
+
+  onSecurityReleaseCheckClick: function viewer_onSecurityReleaseCheckClick(index, bug, target) {
+    // Update all other instances of this bug
+    $('.'+bug+'securityReleasecheck').attr('checked', target.checked);
+
+    ViewerController.onSecurityReleaseCheckClick(bug, target.checked);
   },
 
 
@@ -296,6 +307,11 @@ var Viewer = {
 
   getReopenCheckID: function viewer_getReopenCheckID(cset, id) {
     return cset + id + 'ReopenCheck';
+  },
+
+
+  getSecurityReleaseCheckID: function viewer_getSecurityReleaseCheckID(cset, id) {
+    return cset + id + 'SecurityReleaseCheck';
   },
 
 
@@ -497,6 +513,13 @@ var Viewer = {
       html += '</span>';
     } else
       html += '<br>';
+    if (this.step.canSecurityRelease(id)) {
+      html += '<span class="afterWhiteboard" title="Move out of ';
+      html += UI.htmlEncode(bug.securityGroups.join(', ')) + '">Move to ';
+      html += UI.htmlEncode(Config.securityReleaseGroup) + ': ';
+      html += this.makeCheckboxHTML(cset, index, id, 'securityRelease');
+      html += '</span><br>';
+    }
     if (bug && bug.canSetTestsuite) {
       html += '<span class="afterWhiteboard">In-testsuite: ';
       html += this.makeTestsuiteHTML(cset, index, id);

@@ -4,7 +4,7 @@ var BugData = {
   bugs: {},
   trackingFlag: null,
   statusFlag: null,
-  fields: 'id,resolution,status,whiteboard,keywords,target_milestone,summary,product,component,flags,assigned_to',
+  fields: 'id,resolution,status,whiteboard,keywords,target_milestone,summary,product,component,flags,assigned_to,groups',
   notYetLoaded: [],
   loadCallback: null,
   errorCallback: null,
@@ -114,6 +114,11 @@ var BugData = {
       bug.statusFlag = bugObj[this.statusFlag];
 
     bug.isUnassigned = /^nobody@(?:mozilla.org|nss.bugs)$/.test(bugObj.assigned_to.name);
+
+    bug.securityGroups = (bugObj.groups || []).filter(function BD_isSecurityGroup(group) {
+      return Config.securityGroupRE.test(group);
+    });
+    bug.canSecurityRelease = bug.securityGroups.length > 0;
 
     bug.intestsuite = ' ';
     bug.testsuiteFlagID = -1;

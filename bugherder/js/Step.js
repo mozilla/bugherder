@@ -141,6 +141,8 @@ Step.prototype.canSubmit = function Step_canSubmit() {
     var info = this.bugInfo[bug];
     if ((info.canResolve && info.shouldResolve))
       return true;
+    if (this.canSecurityRelease(bug) && info.shouldSecurityRelease)
+      return true;
   }
 
   for (var cset in this.attachedBugs) {
@@ -208,6 +210,13 @@ Step.prototype.createBug = function Step_createBug(bugID, info) {
     var text = comments.join('\n');
     bug.comment = this.createComment(text);
     bug.comment_tags = info.tags;
+    changed = true;
+  }
+
+  // A change in its own right, so unticking the resolution can't drop it in silence
+  if (this.canSecurityRelease(bugID) && info.shouldSecurityRelease) {
+    bug.groups = {add: [Config.securityReleaseGroup],
+                  remove: BugData.bugs[bugID].securityGroups};
     changed = true;
   }
 
@@ -460,6 +469,13 @@ Step.prototype.postSubmit = function Step_postSubmit(i) {
   }
 
 
+  if ('groups' in sent) {
+    info.canSecurityRelease = false;
+    info.shouldSecurityRelease = false;
+    BugData.bugs[bugID].securityGroups = [];
+    BugData.bugs[bugID].canSecurityRelease = false;
+  }
+
   // Update the intestsuite flag if we sent it
   if ('flags' in sent) {
     info.intestsuite = sent.flags[0].status;
@@ -592,6 +608,8 @@ Step.prototype.attachBugToCset = function Step_attachBugToCset(index, bugID) {
                            shouldReopen: false,
                            canSetStatus: false,
                            shouldSetStatus: false,
+                           canSecurityRelease: false,
+                           shouldSecurityRelease: false,
                            canSetTestsuite: bug && bug.canSetTestsuite,
                            milestone: milestone,
                            tags: PushData.allPushes[index].tags};
@@ -616,6 +634,17 @@ Step.prototype.attachBugToCset = function Step_attachBugToCset(index, bugID) {
         this.bugInfo[bugID].canSetStatus = this.bugInfo[bugID].canResolve;
       else if (Config.treeInfo[Config.treeName].trackedTree)
         this.bugInfo[bugID].canSetStatus = true;
+    }
+
+    // Applies on the trees where landing means fixed, including to a bug an earlier
+    // pass already resolved
+    if (bug && bug.canSecurityRelease && (isMC || Config.treeName == 'comm-central')) {
+      this.bugInfo[bugID].canSecurityRelease = true;
+
+      // Only default it on where this push leaves the fix in the tree
+      var landed = !PushData.allPushes[index].backedOut && !this.bugInfo[bugID].shouldReopen;
+      this.bugInfo[bugID].shouldSecurityRelease = this.bugInfo[bugID].shouldResolve ||
+                                                  (landed && bug.resolution == 'FIXED');
     }
 
     // Allow setting of intestsuite if possible
@@ -714,6 +743,9 @@ Step.prototype.updateShouldSetStatusAfterResolve = function Step_updateShouldSet
     arr.splice(i, 1);
   }
 
+  if (this.bugInfo[bugID].canSecurityRelease)
+    this.bugInfo[bugID].shouldSecurityRelease = should;
+
   if (!this.bugInfo[bugID].canSetStatus)
     return;
 
@@ -782,6 +814,32 @@ Step.prototype.canReopen = function Step_canReopen(bugID) {
     return false;
 
   return this.bugInfo[bugID].canReopen;
+};
+
+
+Step.prototype.shouldSecurityRelease = function Step_shouldSecurityRelease(bugID) {
+  if (!(bugID in this.bugInfo))
+    return false;
+
+  return this.bugInfo[bugID].shouldSecurityRelease;
+};
+
+
+Step.prototype.canSecurityRelease = function Step_canSecurityRelease(bugID) {
+  if (!(bugID in this.bugInfo))
+    return false;
+
+  // A bug can appear in more than one step, so it may already have been moved
+  return this.bugInfo[bugID].canSecurityRelease && BugData.bugs[bugID] &&
+         BugData.bugs[bugID].securityGroups.length > 0;
+};
+
+
+Step.prototype.setShouldSecurityRelease = function Step_setShouldSecurityRelease(bugID, should) {
+  if (!(bugID in this.bugInfo))
+    return;
+
+  this.bugInfo[bugID].shouldSecurityRelease = should;
 };
 
 
@@ -926,6 +984,10 @@ Step.prototype.getProp = function Step_getProp(index, bugID, prop) {
     return this.shouldReopen(bugID);
   if (prop == 'canReopen')
     return this.canReopen(bugID);
+  if (prop == 'shouldSecurityRelease')
+    return this.shouldSecurityRelease(bugID);
+  if (prop == 'canSecurityRelease')
+    return this.canSecurityRelease(bugID);
 
   return false;
 };
@@ -1006,6 +1068,7 @@ Step.prototype.getAdditionalHelpText = function Step_getAdditionalHelpText() {
   var milestonePost = ' a milestone set. You may wish to check it is correct before submitting.';
   var alreadyCommentPost = ' to have already been commented with the correct changeset URL, so commenting there has been disabled.';
   var statusChangePost = ' tracked or uplifted and will have ' + bugherder.statusFlag + ' set to "fixed".';
+  var securityReleasePost = ' restricted, and will be moved to ' + Config.securityReleaseGroup + '.';
 
   var hashave = {singular: 'has', plural: 'have'};
   var appearTo = {singular: 'appears', plural: 'appear'};
@@ -1033,6 +1096,14 @@ Step.prototype.getAdditionalHelpText = function Step_getAdditionalHelpText() {
 
   if (this.statusChangeBugs.length > 0)
     text += this.constructTextFor(this.statusChangeBugs, statusChangePost, isare);
+
+  var securityRelease = [];
+  for (var bugID in this.bugInfo)
+    if (this.canSecurityRelease(bugID) && this.bugInfo[bugID].shouldSecurityRelease)
+      securityRelease.push(bugID);
+
+  if (securityRelease.length > 0)
+    text += this.constructTextFor(securityRelease, securityReleasePost, isare, true);
 
   return text;
 };

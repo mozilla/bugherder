@@ -188,6 +188,13 @@ var ViewerController = {
   },
 
 
+  onSecurityReleaseCheckClick: function vc_onSecurityReleaseCheckClick(bug, newVal) {
+    this.steps[this.currentStep].setShouldSecurityRelease(bug, newVal);
+    Viewer.updateHelpText();
+    Viewer.updateSubmitButton();
+  },
+
+
   onReopenCheckClick: function vc_onReopenCheckClick(bug, newVal) {
     this.steps[this.currentStep].setShouldReopen(bug, newVal);
     Viewer.updateSubmitButton();

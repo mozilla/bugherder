@@ -11,6 +11,11 @@ var Config = {
   hgPushlogURL: "https://hg.mozilla.org/mozilla-central/pushloghtml?changeset=",
   showBugURL: "https://bugzilla.mozilla.org/show_bug.cgi?id=",
 
+  // Matched by shape, not by name: Bugzilla only advertises the core-security groups
+  // that still accept new bugs, so any fixed list misses most of the ones in use
+  securityGroupRE: /^(?:[a-z0-9-]+-)?core-security$/,
+  securityReleaseGroup: "core-security-release",
+
   // Here be dragons
   versionRE: /^mozilla\d+$/i,
   csetInputRE: /^(tip|[\da-f]{12,40})$/i,
