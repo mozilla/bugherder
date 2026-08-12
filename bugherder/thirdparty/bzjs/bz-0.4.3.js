@@ -306,10 +306,7 @@ var BugzillaClient = (function () {
 
       params = params || {};
 
-      if (this.api_key) {
-        params.api_key = this.api_key;
-      }
-
+      // The api key goes in a header, to keep it out of Bugzilla's access logs
       if (this._auth) {
         params.token = this._auth.token;
       } else if (this.username && this.password) {
@@ -328,6 +325,9 @@ var BugzillaClient = (function () {
       var req = new XMLHttpRequest();
       req.open(method, url, true);
       req.setRequestHeader("Accept", "application/json");
+      if (this.api_key) {
+        req.setRequestHeader("X-BUGZILLA-API-KEY", this.api_key);
+      }
       if (method.toUpperCase() !== "GET") {
         req.setRequestHeader("Content-Type", "application/json");
       }
