@@ -1,10 +1,19 @@
 "use strict";
 
 var ViewerController = {
+  credentialsCallback: null,
+  priorSteps: [],
+
   init: function vc_Init(remap, resume) {
     this.remap = remap;
     this.currentStep = -1;
     this.maxStep = -1;
+
+    // A Step is the only record of what it submitted and which of its bugs could not
+    // be loaded, both of which the summary still needs
+    if (this.steps)
+      this.priorSteps = this.priorSteps.concat(this.steps);
+
     this.steps = [];
     this.resume = resume;
   },
@@ -65,12 +74,31 @@ var ViewerController = {
 
     Step.privilegedUpdate = privilegedUpdate;
     Step.privilegedLoad = privilegedLoad;
+
+    // The key may have been asked for on someone else's behalf
+    var callback = ViewerController.credentialsCallback;
+    ViewerController.credentialsCallback = null;
+    if (callback) {
+      callback(key);
+      return;
+    }
+
     this.steps[this.currentStep].onCredentialsAcquired();
   },
 
 
-  acquireCredentials: function vc_acquireCredentials() {
+  // Called detached from ViewerController by the submit path, so don't rely on |this|
+  acquireCredentials: function vc_acquireCredentials(callback) {
+    ViewerController.credentialsCallback = callback || null;
     UI.showCredentialsForm();
+  },
+
+
+  forgetCredentials: function vc_forgetCredentials() {
+    ViewerController.credentialsCallback = null;
+    BugData.setApiKey(null);
+    delete Step.privilegedLoad;
+    delete Step.privilegedUpdate;
   },
 
 
@@ -192,13 +220,16 @@ var ViewerController = {
   },
 
 
-  addStep: function vc_addStage(name, isBackedOut) {
+  addStep: function vc_addStage(name, isBackedOut, bugFilter) {
     var step;
 
     var callbacks = {credentialsCallback: this.acquireCredentials,
                      uiUpdate: this.postSubmitUpdate};
 
-    step = new Step(name, callbacks, isBackedOut);
+    step = new Step(name, callbacks, isBackedOut, bugFilter);
+
+    if (bugFilter && step.getPushes().length == 0)
+      return;
 
     var index = this.steps.push(step) - 1;
     this.maxStep = this.steps.length;
@@ -257,6 +288,6 @@ var ViewerController = {
     };
     var onNext = {label: 'Next', fn: null};
 
-    Summary.view(this.steps, onPrevious, onNext);
+    Summary.view(this.steps, onPrevious, onNext, this.priorSteps);
   }
 };

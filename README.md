@@ -4,6 +4,23 @@
 
 Bugherder is a tool for marking bugs post-merge, created by [Graeme McCutcheon](http://www.graememcc.co.uk/).
 
+RESTRICTED BUGS
+---------------
+Bugherder loads bug data anonymously, so bugs that are restricted to a Bugzilla group can't
+be loaded, and can't be marked. Sheriffs generally don't have access to them either, so they
+are normally left for someone from Release Management to deal with by hand afterwards.
+
+When a push contains such bugs, bugherder offers to load them with an API key. Supply one
+belonging to an account that can see them, and bugherder will restart the normal flow with
+everything except those bugs filtered out - the same commenting, resolving and flag setting as
+usual, over just the restricted bugs. The key is reused for the submission, so it is only asked
+for once. Anything that still can't be loaded with the key given is called out so it can be
+followed up manually.
+
+This doesn't affect the sheriff pass in any way: without a key, nothing loads and the push is
+presented exactly as before.
+
+
 NOTES ON TESTING
 ----------------
 Adding "?debug=1" shows how all changesets were identified, and shows what changesets Bugherder decided were affected by a backout.

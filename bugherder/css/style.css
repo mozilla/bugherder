@@ -335,6 +335,24 @@ div.ctr {
   color: rgb(51,51,51);
 }
 
+#restricted {
+  max-width: 940px;
+  margin: 10px auto 0;
+  padding: 0 10px;
+}
+
+#restrictedText {
+  display: inline-block;
+  border: 1px solid rgb(255,213,153);
+  background-color: rgb(255,239,217);
+  color: rgb(51,51,51);
+  padding: 2px 5px;
+}
+
+#restrictedButton {
+  margin-left: 10px;
+}
+
 #loadingOverlay {
   padding-left: 25px;
 }

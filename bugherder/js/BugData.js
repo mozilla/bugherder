@@ -9,6 +9,12 @@ var BugData = {
   loadCallback: null,
   errorCallback: null,
   checkComments: false,
+  apiKey: null,
+
+  setApiKey: function BD_setApiKey(key) {
+    this.apiKey = key || null;
+  },
+
 
   load: function BD_load(bugs, checkComments, loadCallback, errorCallback) {
     this.notYetLoaded = bugs;
@@ -56,7 +62,7 @@ var BugData = {
         self.parseData(data);
     };
 
-    var bugzilla = bz.createClient({timeout: timeout});
+    var bugzilla = bz.createClient({timeout: timeout, api_key: this.apiKey});
     bugzilla.searchBugs(bugs, callback);
   },
 
@@ -111,7 +117,9 @@ var BugData = {
 
     bug.intestsuite = ' ';
     bug.testsuiteFlagID = -1;
-    bug.canSetTestsuite = ConfigurationData.hasTestsuiteFlag[bug.product][bugObj.component];
+    // The configuration is loaded anonymously, so it omits logged-in-only products
+    var componentFlags = ConfigurationData.hasTestsuiteFlag[bug.product];
+    bug.canSetTestsuite = !!(componentFlags && componentFlags[bugObj.component]);
     if (bug.canSetTestsuite && 'flags' in bugObj && bugObj.flags) {
       for (var i = 0; i < bugObj.flags.length; i++) {
         var f = bugObj.flags[i];

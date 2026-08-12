@@ -9,6 +9,9 @@ var bugherder = {
   tree: null,
   trackingFlag: null,
   statusFlag: null,
+  requestedBugs: [],
+  restrictedMode: false,
+  restrictedBugs: null,
 
   stageTypes: [{name: 'foundBackouts'},
     {name: 'notFoundBackouts'},
@@ -42,6 +45,7 @@ var bugherder = {
       delete Step.privilegedLoad;
       delete Step.privilegedUpdate;
       delete Step.username;
+      BugData.setApiKey(null);
     });
   },
 
@@ -257,7 +261,8 @@ var bugherder = {
     var bugArray = [];
     function forEachCB(val) {
       var bugNum = this.getBug(val);
-      if (bugArray.indexOf(bugNum) == -1)
+      // A push can reach backedOut without a bug number of its own
+      if (bugNum && bugArray.indexOf(bugNum) == -1)
         bugArray.push(bugNum);
     }
 
@@ -270,12 +275,15 @@ var bugherder = {
       var reResult;
       for (var i = 0; i < PushData.notFoundBackouts.length; i++) {
         var ind = PushData.notFoundBackouts[i];
-        PushData.allPushes[ind].backoutBugs = [];
+        var backoutBugs = [];
         Config.bugNumRE.lastIndex = 0;
          while (reResult = Config.bugNumRE.exec(PushData.allPushes[ind].desc))
-          if (PushData.allPushes[ind].backoutBugs.indexOf(reResult[0]) == -1)
-            PushData.allPushes[ind].backoutBugs.push(reResult[0]);
-        bugArray.push.apply(bugArray, PushData.allPushes[ind].backoutBugs);
+          if (backoutBugs.indexOf(reResult[0]) == -1)
+            backoutBugs.push(reResult[0]);
+        PushData.allPushes[ind].backoutBugs = backoutBugs;
+        for (var j = 0; j < backoutBugs.length; j++)
+          if (bugArray.indexOf(backoutBugs[j]) == -1)
+            bugArray.push(backoutBugs[j]);
       }
     }
 
@@ -295,7 +303,112 @@ var bugherder = {
       self.ajaxError(jqResponse, textStatus, errorThrown);
     };
 
+    // BugData consumes the array it is given, so keep our own copy to work out
+    // afterwards which bugs Bugzilla declined to hand over
+    this.requestedBugs = bugArray.slice();
+
     BugData.load(bugArray, this.resume, loadCallback, errorCallback);
+  },
+
+
+  // Clear it all in one place, so loading another changeset behaves like a page reload
+  resetForNewChangeset: function mcM_resetForNewChangeset() {
+    this.requestedBugs = [];
+    this.restrictedMode = false;
+    this.restrictedBugs = null;
+    ViewerController.priorSteps = [];
+    ViewerController.forgetCredentials();
+  },
+
+
+  // Bugzilla silently omits bugs the requesting user can't see, so these are restricted
+  // bugs - or, occasionally, a bug number misdetected in a commit message
+  getUnloadedBugs: function mcM_getUnloadedBugs() {
+    return this.requestedBugs.filter(function mcM_isUnloaded(bug) {
+      return !(bug in BugData.bugs);
+    });
+  },
+
+
+  loadRestrictedBugs: function mcM_loadRestrictedBugs() {
+    var self = this;
+    ViewerController.acquireCredentials(function mcM_onRestrictedKey(key) {
+      self.onRestrictedCredentials(key);
+    });
+  },
+
+
+  onRestrictedCredentials: function mcM_onRestrictedCredentials(key) {
+    var wanted = this.getUnloadedBugs();
+    if (wanted.length == 0)
+      return;
+
+    UI.showLoadingOverlay();
+
+    // Every load from here on is made as this user, so bugs added by hand can be
+    // restricted ones too
+    BugData.setApiKey(key);
+
+    var self = this;
+    var loadCallback = function mcM_restrictedLoadCallback() {
+      self.onRestrictedBugLoad(wanted);
+    };
+
+    var errorCallback = function mcM_restrictedLoadErrorCallback(errmsg) {
+      UI.hideLoadingOverlay();
+      ViewerController.forgetCredentials();
+      var reason = errmsg && errmsg.message ? errmsg.message : 'Unknown error';
+      UI.showErrorMessage('Unable to load the restricted bugs: ' + reason);
+    };
+
+    // Check the comments: this pass is likely to be a second visit
+    BugData.load(wanted.slice(), true, loadCallback, errorCallback);
+  },
+
+
+  onRestrictedBugLoad: function mcM_onRestrictedBugLoad(wanted) {
+    UI.hideLoadingOverlay();
+
+    var loaded = {};
+    var count = 0;
+    for (var i = 0; i < wanted.length; i++) {
+      if (wanted[i] in BugData.bugs) {
+        loaded[wanted[i]] = true;
+        count++;
+      }
+    }
+
+    if (count == 0) {
+      ViewerController.forgetCredentials();
+      UI.showErrorMessage('None of those bugs could be loaded with that api key. The key may be ' +
+                          'wrong, the bugs may be restricted to a group you are not a member of, ' +
+                          'or the bug numbers may have been misdetected in the commit messages.');
+      return;
+    }
+
+    this.restrictedMode = true;
+    this.restrictedBugs = loaded;
+    this.showSteps();
+  },
+
+
+  updateRestrictedUI: function mcM_updateRestrictedUI() {
+    var unloaded = this.getUnloadedBugs();
+
+    if (this.restrictedMode) {
+      UI.showRestrictedStatus(Object.keys(this.restrictedBugs).length, unloaded);
+      return;
+    }
+
+    if (unloaded.length == 0) {
+      UI.hideRestricted();
+      return;
+    }
+
+    var self = this;
+    UI.showRestrictedOffer(unloaded.length, function mcM_onRestrictedClick() {
+      self.loadRestrictedBugs();
+    });
   },
 
 
@@ -341,6 +454,9 @@ var bugherder = {
       this.go('error=invalid', false);
       return;
     }
+
+    // This can run more than once per page load
+    this.resetForNewChangeset();
 
     document.title = 'bugherder (changeset: ' + cset + ')';
     this.loading = 'cset';
@@ -399,6 +515,8 @@ var bugherder = {
     ViewerController.init(this.remap, this.resume);
     Viewer.init();
 
+    var bugFilter = this.restrictedMode ? this.restrictedBugs : null;
+
     // How many stages do we have?
     for (var i = 0; i < this.stageTypes.length; i++) {
       var stageName = this.stageTypes[i].name;
@@ -406,10 +524,20 @@ var bugherder = {
       if (PushData[stageName].length == 0)
         continue;
 
-      ViewerController.addStep(stageName, stageName == 'foundBackouts');
+      ViewerController.addStep(stageName, stageName == 'foundBackouts', bugFilter);
+    }
+
+    // Shouldn't happen, but don't leave the user staring at nothing if it does
+    if (ViewerController.steps.length == 0) {
+      this.restrictedMode = false;
+      this.restrictedBugs = null;
+      UI.showMessageModal('Could not match those bugs to any changeset in this push.');
+      this.showSteps();
+      return;
     }
 
     ViewerController.viewStep(0);
+    this.updateRestrictedUI();
   },
 
 

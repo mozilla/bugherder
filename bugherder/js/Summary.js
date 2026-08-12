@@ -70,17 +70,31 @@ var Summary = {
 
   makeSecBugHTML: function summary_makeSecBugHTML(steps) {
     var sechtml = '';
+
+    // Steps set aside during this session cover the same changesets as their
+    // replacements, so the same bug can be reported by more than one of them
+    var seen = {};
+    function unseen(secBug) {
+      var key = secBug.cset + ':' + secBug.bug;
+      if (key in seen)
+        return false;
+
+      seen[key] = true;
+      return true;
+    }
+
     for (var i = 0; i < steps.length; i++) {
-       if (steps[i].hasSecurityBugs()) {
-         sechtml += '<li>'+steps[i].getHeading(false) + '<br>';
-         var sb = steps[i].getSecurityBugs();
-         sechtml += '<table><tr><td>Changeset</td><td>Link</td><td>Bug</td></tr>';
-         for (var j = 0; j < sb.length; j++) {
-           sechtml += '<tr><td>' + sb[j].cset + '</td><td>' + UI.linkifyRevURL(sb[j].link);
-           sechtml += '</td><td>' + UI.linkifyBug(sb[j].bug) + '</td></tr>';
-         }
-         sechtml += '</table>';
-      }
+       var sb = steps[i].getSecurityBugs().filter(unseen);
+       if (sb.length == 0)
+         continue;
+
+       sechtml += '<li>'+steps[i].getHeading(false) + '<br>';
+       sechtml += '<table><tr><td>Changeset</td><td>Link</td><td>Bug</td></tr>';
+       for (var j = 0; j < sb.length; j++) {
+         sechtml += '<tr><td>' + sb[j].cset + '</td><td>' + UI.linkifyRevURL(sb[j].link);
+         sechtml += '</td><td>' + UI.linkifyBug(sb[j].bug) + '</td></tr>';
+       }
+       sechtml += '</table>';
     }
 
     if (sechtml == '')
@@ -104,24 +118,34 @@ var Summary = {
   },
 
 
-  view: function summary_View(steps, onPrevious, onNext) {
+  view: function summary_View(steps, onPrevious, onNext, priorSteps) {
+    priorSteps = priorSteps || [];
+
+    // Only replaced steps that submitted something belong in the activity list and the
+    // unsubmitted warning. All of them still know which bugs could not be loaded, so the
+    // security bug table gets the lot
+    var submitted = priorSteps.filter(function summary_hasSubmitted(step) {
+      return step.getSentData().length > 0;
+    });
+    var activeSteps = submitted.concat(steps);
+
     // Hide any previous viewer output
     UI.hide('viewerOutput');
     UI.clearErrorMessage();
     $('#viewerOutput').empty();
     $('#viewerOutput').append(this.makeButtonHTML(onPrevious.label, onNext.label));
 
-    var subHTML = this.makeUnsubmittedHTML(steps);
+    var subHTML = this.makeUnsubmittedHTML(activeSteps);
     if (subHTML != '')
       $('#viewerOutput').append(subHTML + '<hr>');
 
-    var secHTML = this.makeSecBugHTML(steps);
+    var secHTML = this.makeSecBugHTML(priorSteps.concat(steps));
     if (secHTML != '')
       $('#viewerOutput').append(secHTML + '<hr>');
 
     $('#viewerOutput').append('<div class="ctr"><h3 class="summaryHeading">Summary of activity</h3></div>');
 
-    steps.forEach(function step_viewSummaryMaker(step){
+    activeSteps.forEach(function step_viewSummaryMaker(step){
       $('#viewerOutput').append(this.makeSummaryForStep(step));
     }, this);
 

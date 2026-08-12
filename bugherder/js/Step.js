@@ -5,9 +5,24 @@
 // bugs should be commented with the url for a particular push, along with the comment to
 // be written for each push/bug combination. A step is also responsible for transmitting the
 // relevant changes to Bugzilla
-function Step(name, callbacks, isBackout) {
+//   bugFilter, if given, holds the only bug numbers this step should concern itself
+//   with; changesets carrying none of them are left out entirely
+function Step(name, callbacks, isBackout, bugFilter) {
 
   var self = this;
+
+  function isWanted(bugID) {
+    return !self.bugFilter || (bugID in self.bugFilter);
+  }
+
+  function hasWantedBug(index) {
+    var push = PushData.allPushes[index];
+    if (push.bug)
+      return isWanted(push.bug);
+    if (push.backoutBugs)
+      return push.backoutBugs.some(isWanted);
+    return false;
+  }
 
   function constructAttachedBugs(useBackouts) {
     var arr = PushData[self.name];
@@ -16,22 +31,65 @@ function Step(name, callbacks, isBackout) {
 
     var len = arr.length;
     for (var i = 0; i < len; i++) {
+      // Anything attached to a changeset we don't draw would submit unseen
+      if (self.bugFilter && !(arr[i] in self.rendered))
+        continue;
+
       var push = PushData.allPushes[arr[i]];
       if (push.bug) {
+        if (!isWanted(push.bug))
+          continue;
         self.attachedBugs[arr[i]] = {};
         self.attachBugToCset(arr[i], push.bug);
       } else if (push.backoutBugs && push.backoutBugs.length > 0) {
+        var backoutBugs = push.backoutBugs.filter(isWanted);
+        if (backoutBugs.length == 0)
+          continue;
         self.attachedBugs[arr[i]] = {};
-        var l2 = push.backoutBugs.length;
+        var l2 = backoutBugs.length;
         for (var j = 0; j < l2; j++)
-          self.attachBugToCset(arr[i], push.backoutBugs[j]);
+          self.attachBugToCset(arr[i], backoutBugs[j]);
       }
     }
+  }
+
+  // Unfiltered, that's every changeset in the category, including those without a bug
+  // so that they can be given one
+  function constructPushList() {
+    if (!self.bugFilter) {
+      self.pushes = PushData[self.name];
+      return;
+    }
+
+    if (!self.hasBackouts) {
+      self.pushes = PushData[self.name].filter(hasWantedBug);
+      self.pushes.forEach(function Step_markRendered(index) {
+        self.rendered[index] = true;
+      });
+      return;
+    }
+
+    PushData[self.name].forEach(function Step_filterBackout(index) {
+      var affected = PushData.allPushes[index].affected.filter(hasWantedBug);
+      if (affected.length == 0 && !hasWantedBug(index))
+        return;
+
+      self.pushes.push(index);
+      self.affected[index] = affected;
+      self.rendered[index] = true;
+      affected.forEach(function Step_markAffectedRendered(j) {
+        self.rendered[j] = true;
+      });
+    });
   }
 
   this.name = name;
   this.callbacks = callbacks;
   this.hasBackouts = isBackout;
+  this.bugFilter = bugFilter || null;
+  this.pushes = [];
+  this.affected = {};
+  this.rendered = {};
 
   this.attachedBugs = {};
   this.bugInfo = {};
@@ -53,6 +111,7 @@ function Step(name, callbacks, isBackout) {
   }
   this.unprivilegedLoader = bz.createClient(options);
 
+  constructPushList();
   constructAttachedBugs(false);
   if (this.hasBackouts)
     constructAttachedBugs(true);
@@ -61,6 +120,19 @@ function Step(name, callbacks, isBackout) {
 
 Step.prototype.getName = function Step_getName() {
   return this.name;
+};
+
+
+Step.prototype.getPushes = function Step_getPushes() {
+  return this.pushes;
+};
+
+
+Step.prototype.getAffected = function Step_getAffected(index) {
+  if (index in this.affected)
+    return this.affected[index];
+
+  return PushData.allPushes[index].affected;
 };
 
 
@@ -84,11 +156,6 @@ Step.prototype.canSubmit = function Step_canSubmit() {
 
 Step.prototype.getSentData = function Step_getSentData() {
   return this.sent;
-};
-
-
-Step.prototype.hasSecurityBugs = function Step_hasSecurityBugs() {
-  return this.securityBugs.length > 0;
 };
 
 
@@ -508,12 +575,12 @@ Step.prototype.attachBugToCset = function Step_attachBugToCset(index, bugID) {
   if (bug) {
     leaveOpen = bug.leaveOpen;
     hasMilestone = bug.milestone != '---';
-    if (hasMilestone || leaveOpen || !(Config.treeName == 'mozilla-central' || Config.treeName == 'comm-central'))
+    var productMilestones = ConfigurationData.milestones[bug.product];
+    if (hasMilestone || leaveOpen || !productMilestones ||
+        !(Config.treeName == 'mozilla-central' || Config.treeName == 'comm-central'))
       milestone = bug.milestone;
-    else {
-      var defaultMilestone = ConfigurationData.milestones[bug.product].defaultIndex;
-      milestone = ConfigurationData.milestones[bug.product].values[defaultMilestone];
-    }
+    else
+      milestone = productMilestones.values[productMilestones.defaultIndex];
   }
 
   if (!(bugID in this.bugInfo)) {
@@ -983,7 +1050,7 @@ Step.prototype.setMaxStepNumber = function Step_setMaxStepNumber(num) {
 
 // Return the user-visible step name to be shown for this step
 Step.prototype.getHeading = function Step_getHeading(addMax) {
-  addMax = addMax || true;
+  addMax = addMax !== false;
 
   var res = this.name;
   if (this.name in Step.headings)

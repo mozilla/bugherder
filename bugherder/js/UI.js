@@ -169,6 +169,10 @@ var UI = {
 
 
   showModalForm: function UI_showModalForm(id, formID, submitAction, cancelID, cancelAction) {
+    // The toggles below would put an already-open form straight back down again
+    if (UI.modalID)
+      return;
+
     UI.modalID = '#' + id;
     if (formID) {
       UI.modalForm = '#' + formID;
@@ -223,6 +227,7 @@ var UI = {
 
   onCredentialsCancel: function UI_onCredentialsCancel(e) {
     $('#apikey').val('');
+    ViewerController.credentialsCallback = null;
   },
 
 
@@ -231,6 +236,40 @@ var UI = {
     UI.showModalForm('credentialsModal', 'credentialsForm', UI.onCredentialsSubmit,
                      'crCancel', UI.onCredentialsCancel);
     $('#apikey')[0].focus();
+  },
+
+
+  hideRestricted: function UI_hideRestricted() {
+    this.hide('restricted');
+  },
+
+
+  showRestrictedOffer: function UI_showRestrictedOffer(count, onClick) {
+    var them = count == 1 ? 'it' : 'them';
+    var text = count + ' bug' + (count == 1 ? '' : 's') + ' in this push could not be';
+    text += ' loaded, most likely because ' + (count == 1 ? 'it is' : 'they are') + ' restricted.';
+    text += ' If you have access to ' + them + ', you can load and mark ' + them;
+    text += ' with your api key.';
+
+    $('#restrictedText').text(text);
+    $('#restrictedButton').off('click.restricted').on('click.restricted', onClick);
+    $('#restrictedButton').show();
+    this.show('restricted');
+  },
+
+
+  showRestrictedStatus: function UI_showRestrictedStatus(loaded, stillUnloaded) {
+    var text = 'Showing the ' + loaded + ' restricted bug' + (loaded == 1 ? '' : 's');
+    text += ' from this push only. Everything else has been left out.';
+    if (stillUnloaded.length > 0) {
+      text += stillUnloaded.length == 1 ? ' Bug ' : ' Bugs ';
+      text += stillUnloaded.join(', ') + ' could not be loaded with your api key,';
+      text += ' and will still need marking by hand.';
+    }
+
+    $('#restrictedText').text(text);
+    $('#restrictedButton').off('click.restricted').hide();
+    this.show('restricted');
   },
 
 

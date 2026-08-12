@@ -37,10 +37,12 @@ var Viewer = {
       'testsuite': this.decorateWithRequired(this.onTestsuiteChange, indexBug, 'Testsuite')
     };
 
+    // init runs again when the steps are rebuilt, so don't stack a second handler set
     var self = this;
-    $('#viewerOutput').click(bindListener(self, clickListeners));
-    $('#viewerOutput').on('input', bindListener(self, inputListeners));
-    $('#viewerOutput').on('change', bindListener(self, changeListeners));
+    $('#viewerOutput').off('.viewer');
+    $('#viewerOutput').on('click.viewer', bindListener(self, clickListeners));
+    $('#viewerOutput').on('input.viewer', bindListener(self, inputListeners));
+    $('#viewerOutput').on('change.viewer', bindListener(self, changeListeners));
   },
 
 
@@ -337,6 +339,11 @@ var Viewer = {
 
 
   makeMilestoneSelectHTML: function viewer_makeMilestoneSelectHTML(cset, index, id) {
+    var product = BugData.bugs[id].product;
+    // Milestones are already encoded by the time they reach bugInfo
+    if (!(product in ConfigurationData.milestones))
+      return this.step.getMilestone(id);
+
     var html = '<select id="';
     html += this.getMilestonesID(cset, id);
     html += '" class="milestone ' + id + 'Milestone"';
@@ -344,7 +351,6 @@ var Viewer = {
     if (!this.step.canResolve(id) || !this.step.shouldResolve(id) || !this.step.canSetMilestone(id))
       html += ' disabled="true"';
     html += '>';
-    var product = BugData.bugs[id].product;
     var milestones = ConfigurationData.milestones[product].values;
     var defaultMilestone = this.step.getMilestone(id);
     for (var i = 0; i < milestones.length; i++) {
@@ -649,7 +655,7 @@ var Viewer = {
 
     this.step = step;
     var isBackedOut = step.hasBackouts;
-    var pushes = PushData[step.getName()];
+    var pushes = step.getPushes();
     var len = pushes.length;
 
     if (!isBackedOut) {
@@ -657,7 +663,7 @@ var Viewer = {
       $('#viewerOutput').append(html);
     } else {
       var html = pushes.map(function viewer_ViewChangesetMaker2(i, ind, arr) {
-        var h = PushData.allPushes[i].affected.map(function viewer_ViewBackoutMaker(j) {return this.addChangeset(j, false, 'backedout');}, this).join('');
+        var h = step.getAffected(i).map(function viewer_ViewBackoutMaker(j) {return this.addChangeset(j, false, 'backedout');}, this).join('');
         return h + this.makeBackoutBannerHTML() + this.addChangeset(i, ind == arr.length - 1, 'backout');
       }, this).join('');
       $('#viewerOutput').append(html);
