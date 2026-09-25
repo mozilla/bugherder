@@ -378,7 +378,7 @@ var PushData = {
     // Don't look for bug numbers if description included
     // changesets: any bug numbers are likely to refer to the
     // same changesets
-    if (hadChangesets) {
+    if (hadChangesets && push.affected.length > 0) {
       push.affected.sort(function compare(a, b) {
         return a - b;
       });
